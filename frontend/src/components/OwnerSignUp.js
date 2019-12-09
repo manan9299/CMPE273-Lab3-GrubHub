@@ -3,8 +3,13 @@ import { Form, Button } from 'react-bootstrap'
 import axios from 'axios';
 import cookie from 'react-cookies';
 import {Redirect} from 'react-router';
-
+import gql from 'graphql-tag';
 import '../css/App.css';
+import ApolloClient from 'apollo-boost';
+
+const client = new ApolloClient({
+	uri : "http://localhost:3001/graphql"
+});
 
 class OwnerSignUp extends Component {
 
@@ -30,44 +35,84 @@ class OwnerSignUp extends Component {
 
 	submitSignUp = (event) => {
 		event.preventDefault();
-		let reqData = {
-			email : this.state.email,
-			password : this.state.password,
-			ownerName : this.state.ownerName,
-			contact : this.state.contact
-		}
 
-		// set withCredentials to true in order to send cookies with request
-		axios.defaults.withCredentials = true;
-
-		axios.post('http://localhost:3001/ownersignup', reqData)
-			.then(response => {
-				
-				if (response.status == 200){
-					let status = response.data.status;
-					if (status == "200") {
-						this.setState({
-							authFlag : true,
-							authMessage : "Signed Up Successfully, Login to Continue"
-						});
-					} else if (status == "403") {
-						this.setState({
-							authFlag : false,
-							authMessage : "Invalid Credentials",
-						});
-					} else {
-						this.setState({
-							authFlag : false,
-							authMessage : "Email already used by another user",
-						});
+		let email = this.state.email;
+		let password = this.state.password;
+		let name = this.state.ownerName;
+		let contact = this.state.contact;
+		// }
+		// console.log(JSON.stringify(reqData));
+		let signUpQuery = gql`
+				mutation registerOwner($name: String, $email: String, $contact: String, $password: String ){
+					registerOwner(name: $name, email: $email, contact: $contact, password: $password) {
+						error,
+						message
 					}
+				}
+			`;
+
+		client.mutate({
+			mutation: signUpQuery,
+			variables : {
+				name,
+				email,
+				password,
+				contact
+			}
+		  }).then(data => {
+			  
+				let error = data.data.registerOwner.error;
+				if(error == ""){
+					this.setState({
+						authFlag : true,
+						authMessage : "Signed Up Successfully, Login to Continue"
+					});
 				} else {
 					this.setState({
 						authFlag : false,
-						authMessage : "Error while fetching Data from Backend"
-					})
+						authMessage : error
+					});
 				}
-			})
+		  })
+		  .catch(error => {
+			  	console.log(error);
+				this.setState({
+					authFlag : false,
+					authMessage : "Failed to Signup",
+				});
+		  });
+
+		// set withCredentials to true in order to send cookies with request
+		// axios.defaults.withCredentials = true;
+
+		// axios.post('http://localhost:3001/ownersignup', reqData)
+		// 	.then(response => {
+				
+		// 		if (response.status == 200){
+		// 			let status = response.data.status;
+		// 			if (status == "200") {
+		// 				this.setState({
+		// 					authFlag : true,
+		// 					authMessage : "Signed Up Successfully, Login to Continue"
+		// 				});
+		// 			} else if (status == "403") {
+		// 				this.setState({
+		// 					authFlag : false,
+		// 					authMessage : "Invalid Credentials",
+		// 				});
+		// 			} else {
+		// 				this.setState({
+		// 					authFlag : false,
+		// 					authMessage : "Email already used by another user",
+		// 				});
+		// 			}
+		// 		} else {
+		// 			this.setState({
+		// 				authFlag : false,
+		// 				authMessage : "Error while fetching Data from Backend"
+		// 			})
+		// 		}
+		// 	})
 	}
 
 	nameChangeHandler = (event) => {

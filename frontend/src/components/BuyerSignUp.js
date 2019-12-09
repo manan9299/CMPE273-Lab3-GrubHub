@@ -3,8 +3,14 @@ import { Form, Button } from 'react-bootstrap'
 import axios from 'axios';
 import cookie from 'react-cookies';
 import {Redirect} from 'react-router';
+import ApolloClient from 'apollo-boost';
 
+import gql from 'graphql-tag';
 import '../css/App.css';
+const client = new ApolloClient({
+	uri : "http://localhost:3001/graphql"
+});
+
 
 class BuyerSignUp extends Component {
 
@@ -31,43 +37,84 @@ class BuyerSignUp extends Component {
 
 	submitSignUp = (event) => {
 		event.preventDefault();
-		let reqData = {
-			email : this.state.email,
-			password : this.state.password,
-			buyerName : this.state.buyerName,
-			contact : this.state.contact,
-			address : this.state.address
-		}
-		console.log(JSON.stringify(reqData));
-
-		axios.post('http://localhost:3001/signup', reqData)
-			.then(response => {
-				console.log("response is " + JSON.stringify(response));
-				if (response.status == 200){
-					let status = response.data.status;
-					if (status == "200") {
-						this.setState({
-							authFlag : true,
-							authMessage : "Signed Up Successfully, Login to Continue"
-						});
-					} else if (status == "403") {
-						this.setState({
-							authFlag : false,
-							authMessage : "Invalid Credentials",
-						});
-					} else {
-						this.setState({
-							authFlag : false,
-							authMessage : "Internal Server Error",
-						});
+		// let reqData = {
+		let email = this.state.email;
+		let password = this.state.password;
+		let name = this.state.buyerName;
+		let contact = this.state.contact;
+		let address = this.state.address;
+		// }
+		// console.log(JSON.stringify(reqData));
+		let signUpQuery = gql`
+				mutation registerBuyer($name: String, $email: String, $contact: String, $password: String, $address: String ){
+					registerBuyer(name: $name, email: $email, contact: $contact, password: $password, address: $address) {
+					error,
+					message
 					}
+				}
+			`;
+
+		client.mutate({
+			mutation: signUpQuery,
+			variables : {
+				name,
+				email,
+				password,
+				contact,
+				address
+			}
+		  }).then(data => {
+			  
+				let error = data.data.registerBuyer.error;
+				if(error == ""){
+					this.setState({
+						authFlag : true,
+						authMessage : "Signed Up Successfully, Login to Continue"
+					});
 				} else {
 					this.setState({
 						authFlag : false,
-						authMessage : "Error while fetching Data from Backend"
-					})
+						authMessage : error
+					});
 				}
-			})
+		  })
+		  .catch(error => {
+			  	console.log(error);
+				this.setState({
+					authFlag : false,
+					authMessage : "Failed to Signup",
+				});
+		  });
+
+
+		// axios.post('http://localhost:3001/signup', reqData)
+		// 	.then(response => {
+		// 		console.log("response is " + JSON.stringify(response));
+		// 		if (response.status == 200){
+		// 			let status = response.data.status;
+		// 			if (status == "200") {
+		// 				this.setState({
+		// 					authFlag : true,
+		// 					authMessage : "Signed Up Successfully, Login to Continue"
+		// 				});
+		// 			} else if (status == "403") {
+		// 				this.setState({
+		// 					authFlag : false,
+		// 					authMessage : "Invalid Credentials",
+		// 				});
+		// 			} else {
+		// 				this.setState({
+		// 					authFlag : false,
+		// 					authMessage : "Internal Server Error",
+		// 				});
+		// 			}
+		// 		} else {
+		// 			this.setState({
+		// 				authFlag : false,
+		// 				authMessage : "Error while fetching Data from Backend"
+		// 			})
+		// 		}
+		// 	})
 	}
 
 	nameChangeHandler = (event) => {
