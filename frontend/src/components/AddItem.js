@@ -5,8 +5,13 @@ import cookie from 'react-cookies';
 import {Redirect} from 'react-router';
 import SectionDropdown from './SectionDropdown';
 import constants from '../config/constants';
+import ApolloClient from 'apollo-boost';
 
+import gql from 'graphql-tag';
 import '../css/App.css';
+const client = new ApolloClient({
+    uri : "http://localhost:3001/graphql"
+});
 
 class AddItem extends Component {
 
@@ -24,55 +29,86 @@ class AddItem extends Component {
     }
 
     componentDidMount(){
-        axios.defaults.headers.common['Authorization'] = localStorage.getItem('grubhubToken');
 
-        axios.get(constants.SERVER_URL +"/getsections")
-            .then(response => {
-                console.log("Response is : " + JSON.stringify(response, null, 4));
-                let {status, payload, restaurant_id} = response.data;
-                
-                if (status == 200){
-                    this.setState({
-                        sectionItems : payload,
-                        restaurantId : restaurant_id
-                    })
-                }
-            });
+        let auth = localStorage.getItem("grubhubToken");
+        let query = gql`
+				query getSections($auth : String ){
+					getSections(auth : $auth) {
+                        error,
+                        sections
+					}
+				}
+            `;
+            
+        client.query({
+			query: query,
+			variables : {
+                auth
+			}
+		  }).then(data => {
+            let {sections, name} = data.data.getSections;
+
+            this.setState({
+                sectionItems : sections,
+                restaurantId : name
+            })
+            
+		  })
+		  .catch(error => {
+              console.log(error);
+                this.setState({
+                    infoNotFound : true
+                });
+		  });
     }
 
     addItem = (event) => {
         event.preventDefault();
         let {name, description, price, section, restaurantId} = this.state;
 
-        let reqData = Object.assign({}, this.state);
-        delete reqData["sectionItems"];
-        delete reqData["submitMessage"];
+        let auth = localStorage.getItem("grubhubToken");
 
-        console.log(JSON.stringify(reqData));
-        
-        axios.defaults.headers.common['Authorization'] = localStorage.getItem('grubhubToken');
-
-        axios.post('http://localhost:3001/additem', reqData)
-            .then(response => {
-                console.log("response is " + JSON.stringify(response));
-                if (response.status == 200){
-                    let status = response.data.status;
-                    if (status == "200") {
-                        this.setState({
-                            submitMessage : "Item Added Successfully"
-                        });
-                    } else {
-                        this.setState({
-                            submitMessage : "Failed to add Item",
-                        });
-                    }
-                } else {
-                    this.setState({
-                        submitMessage : "Failed to add Item"
-                    })
+        let query = gql`
+            mutation addItem($itemName : String, $description : String, $price : String, $section : String, $restaurantId : String, $auth : String ){
+                addItem(itemName : $itemName, description : $description, price : $price, section : $section, restaurantId : $restaurantId, auth : $auth) {
+                    error,
+                    message
                 }
-            })
+            }
+        `;
         
+        let itemName = name;
+        console.log("Section Name : ");
+        console.log(name);
+        client.mutate({
+            mutation: query,
+            variables : {
+                itemName,
+                description,
+                price,
+                section,
+                restaurantId,
+                auth
+            }
+        }).then(data => {
+            let {error, message} = data.data.addItem;
+
+            if(error == ""){
+                this.setState({
+                    submitMessage : "Item Added Successfully"
+                });
+            } else {
+                this.setState({
+                    submitMessage : "Failed to add Item",
+                });
+            }
+        })
+        .catch(error => {
+                console.log(error);
+                this.setState({
+                    submitMessage : "Failed to add Item",
+                });
+        });        
 	}
 
     nameChangeHandler = (event) => {

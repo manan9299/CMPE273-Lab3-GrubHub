@@ -3,8 +3,13 @@ import { Form, Button, Card, Table } from 'react-bootstrap';
 import axios from 'axios';
 import cookie from 'react-cookies';
 import {Redirect} from 'react-router';
+import ApolloClient from 'apollo-boost';
 
+import gql from 'graphql-tag';
 import '../css/App.css';
+const client = new ApolloClient({
+    uri : "http://localhost:3001/graphql"
+});
 
 class AddSection extends Component {
 
@@ -21,40 +26,47 @@ class AddSection extends Component {
         event.preventDefault();
 
         if (this.state.isSectionNameValid){
-            let reqData = {
-                sectionName : this.state.sectionName
-            }
-            console.log(JSON.stringify(reqData));
+            
+            let auth = localStorage.getItem("grubhubToken");
 
-            axios.defaults.headers.common['Authorization'] = localStorage.getItem('grubhubToken');
-    
-            axios.post('http://localhost:3001/addsection', reqData)
-                .then(response => {
-                    console.log("response is " + JSON.stringify(response));
-                    if (response.status == 200){
-                        let status = response.data.status;
-                        if (status == "200") {
-                            this.setState({
-                                submitMessage : "Section Added Successfully"
-                            });
-                        } else if (status == "409") {
-                            this.setState({
-                                submitMessage : "Section Already Exists"
-                            });
-                        } else {
-                            this.setState({
-                                submitMessage : "Failed to insert section",
-                            });
-                        }
-                    } else {
-                        this.setState({
-                            submitMessage : "Failed to insert section"
-                        })
+            let query = gql`
+                mutation AddSection($name : String, $auth : String ){
+                    addSection(name : $name, auth : $auth) {
+                        error,
+                        message
                     }
-                })
+                }
+            `;
+            
+            let name = this.state.sectionName;
+            console.log("Section Name : ");
+            console.log(name);
+            client.mutate({
+                mutation: query,
+                variables : {
+                    name,
+                    auth
+                }
+            }).then(data => {
+                let {error, message} = data.data.addSection;
+
+                if(error == ""){
+                    this.setState({
+                        submitMessage : message
+                    });
+                } else {
+                    this.setState({
+                        submitMessage : "Failed to insert section",
+                    });
+                }
+            })
+            .catch(error => {
+                    console.log(error);
+                    this.setState({
+                        submitMessage : "Failed to insert section",
+                    });
+            });
         }
-        
-		
 	}
 
     nameChangeHandler = (event) => {

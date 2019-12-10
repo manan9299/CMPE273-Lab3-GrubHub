@@ -3,9 +3,13 @@ import { Form, Button } from 'react-bootstrap';
 import axios from 'axios';
 import cookie from 'react-cookies';
 import {Redirect} from 'react-router';
+import ApolloClient from 'apollo-boost';
 
+import gql from 'graphql-tag';
 import '../css/App.css';
-
+const client = new ApolloClient({
+	uri : "http://localhost:3001/graphql"
+});
 class OwnerLogin extends Component {
 
   	constructor(props){
@@ -28,44 +32,81 @@ class OwnerLogin extends Component {
 
 	submitLogin = (event) => {
 		event.preventDefault();
-		let reqData = {
-			email : this.state.email,
-			password : this.state.password
-		}
-		// set withCredentials to true in order to send cookies with request
-		// axios.defaults.withCredentials = true;
+		
+		let email = this.state.email;
+		let password = this.state.password;
 
-		axios.post('http://localhost:3001/ownerlogin', reqData)
-			.then(response => {
-				console.log("response is " + JSON.stringify(response));
-				if (response.status == 200){
-					let status = response.data.status;
-					if (status == "200") {
-						let token = response.data.token;
-						localStorage.setItem('grubhubToken', token);
-						this.setState({
-							authFlag : true,
-							authMessage : "",
-							redirectToHome : <Redirect to= "/ownerhome"/>
-						});
-					} else if (status == "403") {
-						this.setState({
-							authFlag : false,
-							authMessage : "Invalid Credentials",
-						});
-					} else {
-						this.setState({
-							authFlag : false,
-							authMessage : "Internal Server Error",
-						});
+		let loginQuery = gql`
+				query loginOwner($email: String, $password: String ){
+					loginOwner(email: $email, password: $password) {
+						error,
+						token
 					}
+				}
+			`;
+		
+		client.query({
+			query: loginQuery,
+			variables : {
+				email,
+				password
+			}
+		  }).then(data => {
+			  
+				let {error, token} = data.data.loginOwner;
+				if(error == ""){
+					localStorage.setItem('grubhubToken', token);
+					this.setState({
+						authFlag : true,
+						authMessage : "",
+						redirectToHome : <Redirect to= "/ownerhome"/>
+					});
 				} else {
 					this.setState({
 						authFlag : false,
-						authMessage : "Error while fetching Data from Backend"
-					})
+						authMessage : error,
+					});
 				}
-			})
+		  })
+		  .catch(error => {
+			  	console.log(error);
+				this.setState({
+					authFlag : false,
+					authMessage : "Error while logging in",
+				});
+		  });
+
+		// axios.post('http://localhost:3001/ownerlogin', reqData)
+		// 	.then(response => {
+		// 		console.log("response is " + JSON.stringify(response));
+		// 		if (response.status == 200){
+		// 			let status = response.data.status;
+		// 			if (status == "200") {
+		// 				let token = response.data.token;
+		// 				localStorage.setItem('grubhubToken', token);
+		// 				this.setState({
+		// 					authFlag : true,
+		// 					authMessage : "",
+		// 					redirectToHome : <Redirect to= "/ownerhome"/>
+		// 				});
+		// 			} else if (status == "403") {
+		// 				this.setState({
+		// 					authFlag : false,
+		// 					authMessage : "Invalid Credentials",
+		// 				});
+		// 			} else {
+		// 				this.setState({
+		// 					authFlag : false,
+		// 					authMessage : "Internal Server Error",
+		// 				});
+		// 			}
+		// 		} else {
+		// 			this.setState({
+		// 				authFlag : false,
+		// 				authMessage : "Error while fetching Data from Backend"
+		// 			})
+		// 		}
+		// 	})
 	}
 
 	emailChangeHandler = (event) => {

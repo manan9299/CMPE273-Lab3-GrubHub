@@ -37,19 +37,18 @@ class BuyerSignUp extends Component {
 
 	submitSignUp = (event) => {
 		event.preventDefault();
-		// let reqData = {
+		
 		let email = this.state.email;
 		let password = this.state.password;
 		let name = this.state.buyerName;
 		let contact = this.state.contact;
 		let address = this.state.address;
-		// }
-		// console.log(JSON.stringify(reqData));
+		
 		let signUpQuery = gql`
 				mutation registerBuyer($name: String, $email: String, $contact: String, $password: String, $address: String ){
 					registerBuyer(name: $name, email: $email, contact: $contact, password: $password, address: $address) {
-					error,
-					message
+						error,
+						message
 					}
 				}
 			`;

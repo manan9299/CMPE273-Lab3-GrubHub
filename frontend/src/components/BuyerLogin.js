@@ -3,8 +3,13 @@ import { Form, Button } from 'react-bootstrap';
 import axios from 'axios';
 import cookie from 'react-cookies';
 import {Redirect} from 'react-router';
+import ApolloClient from 'apollo-boost';
 
+import gql from 'graphql-tag';
 import '../css/App.css';
+const client = new ApolloClient({
+	uri : "http://localhost:3001/graphql"
+});
 
 class BuyerLogin extends Component {
 
@@ -27,49 +32,88 @@ class BuyerLogin extends Component {
 
 	submitLogin = (event) => {
 		event.preventDefault();
-		let reqData = {
-			email : this.state.email,
-			password : this.state.password
-		}
+		
+		let email = this.state.email;
+		let password = this.state.password;
 
-		axios.post('http://localhost:3001/login', reqData)
-			.then(response => {
-				console.log("response is " + JSON.stringify(response));
-				if (response.status == 200){
-					// response = JSON.parse(JSON.stringify(response));
-					let status = response.data.status ;
-					
-					if (status == "200") {
-						let token = response.data.token;
-						localStorage.setItem('grubhubUserToken', token);
-						this.setState({
-							authFlag : true,
-							authMessage : "",
-							redirectToHome : <Redirect to= "/buyerhome"/>
-						});
-					} else if (status == "403") {
-						this.setState({
-							authFlag : false,
-							authMessage : "Invalid Credentials",
-						});
-					} else if (status == "404") {
-						this.setState({
-							authFlag : false,
-							authMessage : response.data.message,
-						});
-					} else {
-						this.setState({
-							authFlag : false,
-							authMessage : response.data.message,
-						});
+		let loginQuery = gql`
+				query loginBuyer($email: String, $password: String ){
+					loginBuyer(email: $email, password: $password) {
+						error,
+						token
 					}
+				}
+			`;
+		
+		client.query({
+			query: loginQuery,
+			variables : {
+				email,
+				password
+			}
+		  }).then(data => {
+			  
+				let {error, token} = data.data.loginBuyer;
+				if(error == ""){
+					localStorage.setItem('grubhubUserToken', token);
+					this.setState({
+						authFlag : true,
+						authMessage : "",
+						redirectToHome : <Redirect to= "/buyerhome"/>
+					});
 				} else {
 					this.setState({
 						authFlag : false,
-						authMessage : "Error while fetching Data from Backend"
-					})
+						authMessage : error,
+					});
 				}
-			})
+		  })
+		  .catch(error => {
+			  	console.log(error);
+				this.setState({
+					authFlag : false,
+					authMessage : "Error while logging in",
+				});
+		  });
+
+		// axios.post('http://localhost:3001/login', reqData)
+		// 	.then(response => {
+		// 		console.log("response is " + JSON.stringify(response));
+		// 		if (response.status == 200){
+		// 			// response = JSON.parse(JSON.stringify(response));
+		// 			let status = response.data.status ;
+					
+		// 			if (status == "200") {
+		// 				let token = response.data.token;
+		// 				localStorage.setItem('grubhubUserToken', token);
+		// 				this.setState({
+		// 					authFlag : true,
+		// 					authMessage : "",
+		// 					redirectToHome : <Redirect to= "/buyerhome"/>
+		// 				});
+		// 			} else if (status == "403") {
+		// 				this.setState({
+		// 					authFlag : false,
+		// 					authMessage : "Invalid Credentials",
+		// 				});
+		// 			} else if (status == "404") {
+		// 				this.setState({
+		// 					authFlag : false,
+		// 					authMessage : response.data.message,
+		// 				});
+		// 			} else {
+		// 				this.setState({
+		// 					authFlag : false,
+		// 					authMessage : response.data.message,
+		// 				});
+		// 			}
+		// 		} else {
+		// 			this.setState({
+		// 				authFlag : false,
+		// 				authMessage : "Error while fetching Data from Backend"
+		// 			})
+		// 		}
+		// 	})
 	}
 
 	emailChangeHandler = (event) => {

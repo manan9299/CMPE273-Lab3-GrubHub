@@ -15,6 +15,11 @@ var buyerRouter = require('./routers/buyer');
 var orderRouter  = require('./routers/orders');
 
 var constants = require('./lib/constants');
+var mongoDatabase = require('./mongoDatabase');
+var mongodb;
+mongoDatabase.getMongoConnection().then((connection) => {
+    mongodb = connection;
+});
 const JWT_KEY = constants.JWT_KEY;
 
 //use cors to allow cross origin resource sharing
@@ -29,7 +34,6 @@ app.use(function(req, res, next) {
   });
 
 app.use(cors({ origin: 'http://localhost:3000', credentials: true }));
-
 
 
 //use express session to maintain session data
@@ -48,16 +52,36 @@ var schema = buildSchema(`
     type Query {
 		loginBuyer(email : String, password : String) : loginStatus
 		loginOwner(email : String, password : String) : loginStatus
+		getRestaurantInfo(auth : String) : Restaurant
+		getSections(auth : String) : Sections
 	}
 	
 	type Mutation {
 		registerBuyer(name : String, email : String, password : String, contact : String, address : String ) : Status
 		registerOwner(name : String, email : String, password : String, contact : String ) : Status
+		updateRestaurant(name : String, address : String, city : String, contact : String, zip : String, auth : String ) : Status
+		addSection(name : String, auth : String) : Status
+		addItem(itemName : String, description : String, price : String, section : String, restaurantId : String, auth : String) : Status
 	}
 	
 	type Status {
 		error : String,
 		message : String
+	}
+
+	type Sections {
+		error : String,
+		sections : [String],
+		restaurantId : String
+	}
+
+	type Restaurant {
+		error : String,
+		name : String,
+		address : String,
+		city : String,
+		zip : String,
+		contact : String
 	}
 
 	type loginStatus {
@@ -68,6 +92,151 @@ var schema = buildSchema(`
 
 // The root provides a resolver function for each API endpoint
 var root = {
+	addItem : async (args) => {
+		console.log(args);
+		
+		try {
+			let restaurant = await restaurantManagementRouter.getRestaurantInfo(args);
+			console.log("Restaurant Info ")
+			console.log(restaurant);
+
+			let {name, address, city, zip, contact} = restaurant;
+
+			let { itemName, description, price, section, restaurantId } = args;
+
+            let restaurantDetails = {
+                name : name,
+                address : address,
+                city : city,
+                zip, zip,
+                contact : contact
+            }
+            let item = {
+                name : itemName,
+                description : description,
+                price : price,
+                section : section,
+                restaurant : restaurantDetails
+            }
+
+            let items = mongodb.collection('items');
+			let addItemResult = await items.insertOne(item);
+			
+			return {
+				"error" : "",
+				"message" : "Item Added Successfully"
+			}
+
+		} catch(err) {
+			console.log(err);
+			return {
+				"error" : "Failed to add item",
+				"message" : ""
+			};
+		}
+	},
+	getSections : async (args) => {
+		console.log(args);
+		
+		try {
+			let restaurant = await restaurantManagementRouter.getRestaurantInfo(args);
+			console.log("Restaurant Info ")
+			console.log(restaurant);
+			let { sections, name } = restaurant;
+			return {
+				"error" : "",
+				"sections" : sections,
+				"restaurantId" : name
+			};
+
+		} catch(err) {
+			console.log(err);
+			return {
+				"error" : "Failed to get Sections Info",
+				"sections" : [],
+				"restaurantId" : ""
+			};
+		}
+	},
+	addSection : async (args) => {
+		console.log(args);
+		
+		try {
+			let restaurant = await restaurantManagementRouter.addSection(args);
+			console.log("Restaurant Info ")
+			console.log(restaurant);
+
+			let sections = restaurant.sections || [] ;
+			sections.push(args.name);
+
+			let restaurants = mongodb.collection('restaurants');
+			let updateSectionResult = await restaurants.updateOne({ownerEmail : restaurant.ownerEmail}, { $set : {sections : sections} }, {upsert : true});
+			
+			return {
+				"error" : "",
+				"message" : "Section Added Successfully"
+			}
+
+		} catch(err) {
+			console.log(err);
+			return {
+				"error" : "Failed to add section",
+				"message" : ""
+			};
+		}
+	},
+	getRestaurantInfo : async (args) => {
+		console.log(args);
+		
+		try {
+			let restaurant = await restaurantManagementRouter.getRestaurantInfo(args);
+			console.log("Restaurant Info ")
+			console.log(restaurant);
+			let { name, address, city, zip, contact } = restaurant;
+			return {
+				"error" : "",
+				"name" : name,
+				"address" : address,
+				"city" : city,
+				"zip" : zip,
+				"contact" : contact
+			};
+
+		} catch(err) {
+			console.log(err);
+			return {
+				"error" : "Failed to get Restaurant Info",
+				"name" : "",
+				"address" : "",
+				"city" : "",
+				"zip" : "",
+				"contact" : ""
+			};
+		}
+	},
+	updateRestaurant : async (args) => {
+		console.log(args);
+		
+		try {
+			let restaurant = await restaurantManagementRouter.updateRestaurant(args);
+			
+			let owners = mongodb.collection('owners');
+
+			let owner = await owners.updateOne({email: args.email}, { $set : {restaurantOwned : args.name} }, {upsert : true})
+			
+			return {
+				"message" : "Restaurant Info Updated",
+				"error" : ""
+			};
+
+		} catch(err) {
+			console.log(err);
+			return {
+				"message" : "",
+				"error" : "Failed to Update Restaurant Info"
+			};
+		}
+	},
 	loginOwner : async (args) => {
 		console.log(args);
 		
@@ -98,6 +267,7 @@ var root = {
 			};
 		}
 	},
+	
 	loginBuyer : async (args) => {
 		console.log(args);
 		
@@ -188,93 +358,5 @@ app.use('/graphql', graphqlHttp({
 	graphiql: true,
 }));
 
-//Allow Access Control
-// app.use(function(req, res, next) {
-//     res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
-//     res.setHeader('Access-Control-Allow-Credentials', true);
-//     res.setHeader('Access-Control-Allow-Methods', 'GET,HEAD,OPTIONS,POST,PUT,DELETE');
-//     res.setHeader('Access-Control-Allow-Headers', 'Access-Control-Allow-Headers, Origin,Accept, X-Requested-With, Content-Type, Access-Control-Request-Method, Access-Control-Request-Headers');
-//     res.setHeader('Cache-Control', 'no-cache');
-//     next();
-// });
-
-// app.use(userRouter);
-// app.use(restaurantManagementRouter);
-// app.use(buyerRouter);
-// app.use(orderRouter);
-
 app.listen(3001);
 console.log('Server Listening on port 3001');
-
-// var express = require('express');
-// var graphqlHTTP = require('express-graphql');
-// var { buildSchema } = require('graphql');
-
-// // Construct a schema, using GraphQL schema language
-// var schema = buildSchema(`
-//   input MessageInput {
-//     content: String
-//     author: String
-//   }
-
-//   type Message {
-//     id: ID!
-//     content: String
-//     author: String
-//   }
-
-//   type Query {
-//     getMessage(id: ID!): Message
-//   }
-
-//   type Mutation {
-//     createMessage(input: MessageInput): Message
-//     updateMessage(id: ID!, input: MessageInput): Message
-//   }
-// `);
-
-// // If Message had any complex fields, we'd put them on this object.
-// class Message {
-//   constructor(id, {content, author}) {
-//     this.id = id;
-//     this.content = content;
-//     this.author = author;
-//   }
-// }
-
-// // Maps username to content
-// var fakeDatabase = {};
-
-// var root = {
-//   getMessage: ({id}) => {
-//     if (!fakeDatabase[id]) {
-//       throw new Error('no message exists with id ' + id);
-//     }
-//     return new Message(id, fakeDatabase[id]);
-//   },
-//   createMessage: ({input}) => {
-//     // Create a random id for our "database".
-//     var id = require('crypto').randomBytes(10).toString('hex');
-
-//     fakeDatabase[id] = input;
-//     return new Message(id, input);
-//   },
-//   updateMessage: ({id, input}) => {
-//     if (!fakeDatabase[id]) {
-//       throw new Error('no message exists with id ' + id);
-//     }
-//     // This replaces all old data, but some apps might want partial update.
-//     fakeDatabase[id] = input;
-//     return new Message(id, input);
-//   },
-// };
-
-// var app = express();
-// app.use('/graphql', graphqlHTTP({
-//   schema: schema,
-//   rootValue: root,
-//   graphiql: true,
-// }));
-// app.listen(3001, () => {
-//   console.log('Running a GraphQL API server at localhost:4000/graphql');
-// });

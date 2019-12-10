@@ -3,8 +3,13 @@ import { Form, Button, Card, Table } from 'react-bootstrap';
 import axios from 'axios';
 import cookie from 'react-cookies';
 import {Redirect} from 'react-router';
+import ApolloClient from 'apollo-boost';
 
+import gql from 'graphql-tag';
 import '../css/App.css';
+const client = new ApolloClient({
+    uri : "http://localhost:3001/graphql"
+});
 
 class RestaurantInfo extends Component {
 
@@ -23,66 +28,87 @@ class RestaurantInfo extends Component {
     }
 
     componentDidMount(){
-        axios.defaults.headers.common['Authorization'] = localStorage.getItem('grubhubToken');
 
-        axios.get("http://localhost:3001/getRestaurantInfo")
-            .then(response => {
-                console.log("Response is : " + JSON.stringify(response, null, 4));
-                let {status, payload} = response.data;
-                
-                if (status == 200){
-                    this.setState({
-                        restaurantId : payload["restaurantId"],
-                        name : payload["name"],
-                        address : payload["address"],
-                        city : payload["city"],
-                        zip : payload["zip"],
-                        contact : payload["contact"]
-                    });
-                } else if (status == 404){
-                    this.setState({
-                        infoNotFound : true
-                    });
+        let auth = localStorage.getItem("grubhubToken");
+        let updateQuery = gql`
+				query getRestaurantInfo($auth : String ){
+					getRestaurantInfo(auth : $auth) {
+						error,
+                        name,
+                        address,
+                        city,
+                        zip,
+                        contact
+					}
+				}
+            `;
+            
+        client.query({
+			query: updateQuery,
+			variables : {
+                auth
+			}
+		  }).then(data => {
+            let {name, address, city, zip, contact} = data.data.getRestaurantInfo;
 
-                }
+            this.setState({
+                name : name,
+                address : address,
+                city : city,
+                zip : zip,
+                contact : contact
             });
+		  })
+		  .catch(error => {
+              console.log(error);
+                this.setState({
+                    infoNotFound : true
+                });
+		  });
     }
 
     submitUpdate = () => {
         let {name, address, city, zip, contact} = this.state;
-        
-        let reqData = {
-            name : name,
-            address : address,
-            city : city,
-            zip : zip,
-            contact : contact
-        }
-
-        axios.post("http://localhost:3001/updateRestaurant", reqData)
-            .then( response => {
-                console.log("Response is : " + JSON.stringify(response));
-
-                if(response.status == 200){
-                    let status = response.data.status;
-                    if (status == 200){
-                        this.setState({
-                            updateMessage : "Restaurant Info updated successfully",
-                            infoNotFound : false
-                        });
-                    } else {
-                        this.setState({
-                            updateMessage : "Failed to update restaurant Info"
-                        });
-                    }
-                } else {
-                    this.setState({
+        let auth = localStorage.getItem("grubhubToken");
+        let updateQuery = gql`
+				mutation updateRestaurant($name: String, $address: String, $city: String, $zip: String, $contact: String, $auth : String ){
+					updateRestaurant(name: $name, address: $address, city : $city, zip : $zip, contact : $contact, auth : $auth) {
+						error,
+						message
+					}
+				}
+			`;
+		
+		client.mutate({
+			mutation: updateQuery,
+			variables : {
+                name,
+                address,
+                city,
+                zip,
+                contact,
+                auth
+			}
+		  }).then(data => {
+			  
+				let {error, message} = data.data.updateRestaurant;
+				if(error == ""){
+					this.setState({
+                        updateMessage : "Restaurant Info updated successfully",
+                        infoNotFound : false
+                    });
+				} else {
+					this.setState({
                         updateMessage : "Failed to update restaurant Info"
                     });
-                }
-            });
-
-
+				}
+		  })
+		  .catch(error => {
+			  	console.log(error);
+                  this.setState({
+                    updateMessage : "Failed to update restaurant Info"
+                });
+		  });
     }
 
     getTableContents = () => {
