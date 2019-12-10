@@ -220,10 +220,6 @@ var root = {
 		try {
 			let restaurant = await restaurantManagementRouter.updateRestaurant(args);
 			
-			let owners = mongodb.collection('owners');
-
-			let owner = await owners.updateOne({email: args.email}, { $set : {restaurantOwned : args.name} }, {upsert : true})
-			
 			return {
 				"message" : "Restaurant Info Updated",
 				"error" : ""
