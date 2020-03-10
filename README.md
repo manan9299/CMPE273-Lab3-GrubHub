@@ -1,4 +1,4 @@
-GrubHub
+### GrubHub (Using GraphQL)
 
 Steps to run : 
 
